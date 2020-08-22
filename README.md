@@ -199,7 +199,7 @@ CSS 样式：
 ```
 而涉及到的js就比较少了，就是用 setTimeout 对元素进行简单的添加和删除对应动画类名就可以了。
 
-### 刮刮卡的实现
+## 刮刮卡的实现
 
 使用方法，首先引入 js 文件：
 ```
@@ -277,8 +277,8 @@ var scratch = new Scratch({
 - percent：在清除多少区域之后清空canvas
 - cursor：光标
 
-[刮刮卡原地址](https://github.com/Masth0/ScratchCard)
-这个刮刮卡当时引用的这位小伙伴的组件，暂时还没有时间仔细研究过，后面有空有可能也会自己尝试去写一个。不过在使用过程中发现，刮奖动作跟 Swiper 滑动会有冲突，导致在刮奖过程中卡片会被滑动，所以阅读 js 源码后，对于该库做了一些修改从而在刮奖过程中屏蔽了刮刮卡的滑动动作。
+[刮刮卡原地址](https://github.com/Masth0/ScratchCard)  
+这个刮刮卡当时直接引用的这位小伙伴的组件，没有自己造。不过在使用过程中发现，刮奖动作跟 Swiper 滑动会有冲突，导致在刮奖过程中卡片会被滑动，所以阅读 js 源码后，对于该库做了一些修改从而在刮奖过程中屏蔽了刮刮卡的滑动动作。
 ```
 var scratchMove = function(e) {
   e.stopPropagation()
@@ -288,6 +288,24 @@ var scratchMove = function(e) {
     _this.canvas.style.pointerEvents = 'none';
     _this.callback(_this.options.callback);
   }
-
 };
 ```
+
+## 抓牛套牛游戏
+
+考虑到被人诟病的 setInterval 做动画存在失帧的问题并且有点接地气，还是果断追随了 requestanimationframe 的脚步。一开始很自信得觉得会一切顺利，然而为后面的掉发历程埋下了伏笔。
+浏览器兼容：
+```
+var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame
+```
+但是由于测试机型的时候发现部分低版本安卓手机的动画还是没有达到预期的效果，该浏览器兼容的方法还是无法完全满足自身性能问题导致的帧动画调用的间隔会相对较长，由于无法控制调用的时间，我还是把万能的 setInterval 请回来了，对于高频问题的安卓6.0及以下设备做了兼容处理，具体实现如下：
+```
+var timeInterval = null // 帧毫秒数
+
+if (getPlatform() === 'gphone' && ( Number( getGphoneVersion().split('.')[0] ) < 6 || ( Number( getGphoneVersion().split('.')[0] ) === 6 && Number( getGphoneVersion().split('.')[1] ) === 0 ) )) {
+  timeInterval = 125
+} else {
+  timeInterval = window.interval || 1000/60
+}
+```
+其中，getPlatform() 和 getGphoneVersion() 这两个公共方法在 [common.js](scrips/common.js)中
