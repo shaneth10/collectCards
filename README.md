@@ -199,4 +199,95 @@ CSS 样式：
 ```
 而涉及到的js就比较少了，就是用 setTimeout 对元素进行简单的添加和删除对应动画类名就可以了。
 
+### 刮刮卡的实现
 
+使用方法，首先引入 js 文件：
+```
+<script type="text/javascript" src="scripts/Scratch.js"></script>
+```
+使用下面的 HTML 来制作一个刮刮卡：
+```
+<div class="scratch_container">
+  <div class="scratch_viewport">
+    <!-- result picture -->
+    <canvas id="js-scratch-canvas"></canvas>
+  </div>
+</div>
+```
+为刮刮卡添加 CSS 样式：
+```
+.scratch_container {
+  position: relative;
+  margin: 0 auto;
+  max-width: 1024px;
+}
+ 
+.scratch_viewport {
+  position: relative;
+  width: 250px;
+  height: 250px;
+  margin: 0 auto;
+  z-index: 0;
+}
+ 
+.scratch_picture-under {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  z-index: -1;
+}
+ 
+.scratch_container canvas {
+  position: relative;
+  width: 100%;
+  height: auto;
+  z-index: 1;
+} 
+```
+随后，我们就可以来 init 一个刮刮卡：
+```
+var scratch = new Scratch({
+    canvasId: 'js-scratch-canvas',
+    imageBackground: 'loose.jpg',
+    pictureOver: 'foreground.jpg',
+    cursor: {
+        png: 'piece.png',
+        cur: 'piece.cur',
+        x: '20',
+        y: '17'
+    },
+    radius: 20,
+    nPoints: 100,
+    percent: 50,
+    callback: function () {
+      alert('I am Callback.');
+    },
+    pointSize: { x: 3, y: 3}
+});
+```
+以下是一些配置参数：
+- canvasId：canvas的id
+- imageBackground：背景图片（刮开后呈现的图片）
+- pictureOver：前景图片
+- sceneWidth：canvas的宽度
+- sceneHeight：canvas的高度
+- radius：清除区域的半径
+- nPoints：清除区域的杂点数量
+- percent：在清除多少区域之后清空canvas
+- cursor：光标
+
+[刮刮卡原地址](https://github.com/Masth0/ScratchCard)
+这个刮刮卡当时引用的这位小伙伴的组件，暂时还没有时间仔细研究过，后面有空有可能也会自己尝试去写一个。不过在使用过程中发现，刮奖动作跟 Swiper 滑动会有冲突，导致在刮奖过程中卡片会被滑动，所以阅读 js 源码后，对于该库做了一些修改从而在刮奖过程中屏蔽了刮刮卡的滑动动作。
+```
+var scratchMove = function(e) {
+  e.stopPropagation()
+  _this.scratch(e);
+  var clear = _this.clear();
+  if (clear) {
+    _this.canvas.style.pointerEvents = 'none';
+    _this.callback(_this.options.callback);
+  }
+
+};
+```
