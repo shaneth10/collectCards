@@ -317,11 +317,15 @@ var hasClickTaoniuBtn = false // 是否点击套牛按钮 点击该按钮之后�
 var hasReachTop = false // 是否到达顶部 游戏设计只有绳索上升过程才能套中牛 以此标志符来进行判断是否调用判断函数
 var hasCatch = false // 是否抓住牛 抓住牛后需要对状态进行重置 使绳处于收回状态
 var catchBullObj = {} // 抓住的牛对象
+
+// 产品的心思我们猜不透 参数可配置 解放自己
 var timeLevel3 = 1000 // 三级牛跑过的时间 ms
 var timeLevel2 = 1200 // 二级牛跑过的时间 ms
 var timeLevel1 = 1500 // 一级牛跑过的时间 ms
 var timeRope = 500 // 绳子到达顶部的时间
-var posInfo = { // 基本位置信息对象
+
+// 基本位置信息对象
+var posInfo = { 
 	winWidth: $(window).width(), // 屏蔽宽度 可定义每种牛跑过一屏的时间来兼容移动端设备
   rate: $(window).width() / 750, // 转换率 方便rem转px 750为设计稿宽度
 
