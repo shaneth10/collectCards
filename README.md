@@ -1,5 +1,7 @@
 # 抓金牛集五股卡
 
+基于Vue、jQuery。
+
 该运营活动囊括的功能点比较繁杂，但是由于涉及到公司内部业务及组件库，部分功能无法跟大家分享。  
 本次将仅会对类似**支付宝集五福**、**刮刮卡**和**抓牛套牛游戏**这几个功能点的实现进行介绍。  
 另外,还会穿插一些本人在移动端开发过程中所遇到的一些问题的分析及解决，包括**图片预加载**、**机型兼容**和**动画兼容**等。
@@ -261,10 +263,10 @@ var scratch = new Scratch({
     nPoints: 100,
     percent: 50,
     callback: function () {
-      alert('I am Callback.');
+      alert('I am Callback.')
     },
     pointSize: { x: 3, y: 3}
-});
+})
 ```
 以下是一些配置参数：
 - canvasId：canvas的id
@@ -282,13 +284,13 @@ var scratch = new Scratch({
 ```
 var scratchMove = function(e) {
   e.stopPropagation()
-  _this.scratch(e);
-  var clear = _this.clear();
+  _this.scratch(e)
+  var clear = _this.clear()
   if (clear) {
-    _this.canvas.style.pointerEvents = 'none';
-    _this.callback(_this.options.callback);
+    _this.canvas.style.pointerEvents = 'none'
+    _this.callback(_this.options.callback)
   }
-};
+}
 ```
 
 ## 抓牛套牛游戏
@@ -323,6 +325,7 @@ var timeLevel3 = 1000 // 三级牛跑过的时间 ms
 var timeLevel2 = 1200 // 二级牛跑过的时间 ms
 var timeLevel1 = 1500 // 一级牛跑过的时间 ms
 var timeRope = 500 // 绳子到达顶部的时间
+var baseDis =  0 // 中心距离多少像素才算抓住
 
 // 基本位置信息对象
 var posInfo = { 
@@ -357,6 +360,7 @@ var posInfo = {
   levelCenterx3: 200 * $(window).width() / 750, // 三等牛中心距离x
 }
 ```
+
 这样我们的基础参数就全部声明好了，接下来就需要初始化 canvas 了：
 ```
 let canvas = document.getElementById('canvas')
@@ -364,4 +368,298 @@ canvas.width = posInfo.winWidth
 posInfo.canvasHeight = $('.canvas-case').height()
 canvas.height = $('.canvas-case').height()
 context = canvas.getContext('2d')
+```
+
+对了，在开发过程中我发现有时候 ```drawImage()``` 并没有图片，我大概觉得是图片未加载成功导致的，所以在```created(){}```函数中，还是需要先预加载一下相关图片，问题得到了解决，方案都大同小异：
+```
+// 图片地址集合
+var imgList = {
+  ropeImg: 'images/game-rope-img.png',
+  runlevel11: 'images/game-run-yaobull-1.png',
+  runlevel12: 'images/game-run-yaobull-2.png',
+  runlevel21: 'images/game-run-level2-1.png',
+  runlevel22: 'images/game-run-level2-2.png',
+  runlevel31: 'images/game-run-level3-1.png',
+  runlevel32: 'images/game-run-level3-2.png',
+  catchlevel1: 'images/game-catch-level1.png',
+  catchlevel2: 'images/game-catch-level2.png',
+  catchlevel3: 'images/game-catch-level3.png'
+}
+
+var createArr = [] // 牛的生成数组，每1000ms 记录一次
+var imgDomList = {} // new Image() 对象集合
+
+// 图片预加载
+preload() {
+  for (let key in imgList) {
+    imgDomList[key] = new Image()
+    imgDomList[key].src = G_URL_OBJ.statHost + imgList[key] + '?v=' + Math.random() // G_URL_OBJ.statHost 静态资源服务器host
+    imgDomList[key].crossOrigin = 'Anonymous' // canvas 图片跨域处理
+    imgDomList[key].onload = () => {
+      this.loadNum++ // 用于页面加载动画的展示 达到100%后显示游戏页面
+    }
+  }
+}
+```
+图片预加载的方案对于页面图片资源较多的情况下还是很有必要的，可以让用户在等待过程中的体验感更佳。
+
+下面就是动画绘制、抓牛判断等的逻辑实现了：
+```
+// 用于 setInterval 方法，必要时可以 clearInterval(frameTimer) 结束动画
+var frameTimer = null
+
+
+// 执行动画
+frameAction() {
+  if (getPlatform() === 'gphone' && ( Number( getGphoneVersion().split('.')[0] ) < 6 || ( Number( getGphoneVersion().split('.')[0] ) === 6 && Number( getGphoneVersion().split('.')[1] ) === 0 ) )) {
+    frameTimer = setInterval(() => {
+      this.animationFrame(new Date().getTime(), 'setinterval')
+    },timeInterval)
+  } else {
+    requestAnimationFrame(this.animationFrame)
+  }
+}
+
+
+// 每帧执行的动画函数
+animationFrame(timestamp, type) {
+
+  let that = this
+  // 抓牛数量达到上限停止执行动画
+  if (this.bullNum === this.remain_card_num) {
+    if (type === 'setinterval') {
+      this.cardLimitShow = true
+      return false
+    } else {
+      clearInterval(frameTimer)
+      this.cardLimitShow = true
+      return false
+    }
+  }
+
+  if (!start) start = timestamp // 记录游戏开始时间
+  this.secLeft = Math.ceil((20000 + gameStartTime - timestamp)/1000) // 设置倒计时 剩余秒数
+  this.creatBull(timestamp - start) // 生成新的牛
+  context.clearRect(0,0,posInfo.winWidth,posInfo.canvasHeight) // 清除画布
+  // 循环画牛
+  bullList.forEach( (item, index) => {
+    item.count++
+    // 画牛 单数左手图一 双数图二 两张图切换
+    if (Math.floor(item.count/6)%2>0) {
+      that.getDrawImageParam(item, 1)
+    } else {
+      that.getDrawImageParam(item, 2)
+    }
+  })
+
+  // 点击套牛按钮 绳子坐标变化
+  if (hasClickTaoniuBtn) { 
+    // 绳子已达到顶部 处于收回状态 y坐标↑ ropeCount↓
+    if (hasReachTop) {
+      ropeCount--
+      // 回到底部或者更多 需归位
+      if ((posInfo.catchPoix - ropeCount * posInfo.catchRopepxFrame) >= posInfo.ropeStart) {
+        hasClickTaoniuBtn = false
+        ropeCount = 0
+        hasReachTop = false
+        hasCatch = false
+        catchBullObj = {}
+        context.drawImage(imgDomList.ropeImg, posInfo.ropeLeft, posInfo.ropeStart, 221 * posInfo.rate, 883 * posInfo.rate)
+      } else if (hasCatch) { // 抓住牛
+        context.drawImage(imgDomList['catchlevel'+catchBullObj.type], posInfo.ropeCatchLeft, posInfo.catchPoix - ropeCount * posInfo.catchRopepxFrame, 362 * posInfo.rate, 728 * posInfo.rate)
+      } else { // 为抓住牛
+        context.drawImage(imgDomList.ropeImg, posInfo.ropeLeft, posInfo.ropeStart - ropeCount * posInfo.roppxFrame, 221 * posInfo.rate, 883 * posInfo.rate)
+      }
+    } else { // 绳子未到达顶部 处于上升状态 y坐标↓ ropeCount↑
+      ropeCount++
+      // 到达顶部
+      if ((posInfo.ropeStart - ropeCount * posInfo.roppxFrame) <= posInfo.ropeEnd) {
+        hasReachTop = true
+        let index = bullList.findIndex((item) => that.judgeIsCatched(item, ropeCount, 3)) // findIndex 在低版本安卓机不兼容 下面会贴出兼容的代码
+        // 未抓到牛
+        if (index === -1) {
+          hasCatch = false
+          catchBullObj = {}
+          context.drawImage(imgDomList.ropeImg, posInfo.ropeLeft, posInfo.ropeEnd, 221 * posInfo.rate, 883 * posInfo.rate)
+        } else {
+          hasCatch = true
+          catchBullObj = bullList[index]
+          hasReachTop = true // 抓住就开始下落
+          bullList.splice(index, 1)
+          posInfo.catchPoix = posInfo.ropeStart - ropeCount * posInfo.roppxFrame
+          context.drawImage(imgDomList['catchlevel'+catchBullObj.type], posInfo.ropeCatchLeft, posInfo.ropeEnd, 362 * posInfo.rate, 728 * posInfo.rate)
+          posInfo.catchRopepxFrame = ropeCount * posInfo.roppxFrame / (500/timeInterval)
+        }
+      } else {
+        let index = bullList.findIndex((item) => that.judgeIsCatched(item, ropeCount, 4))
+        if (index === -1) {
+          hasCatch = false
+          catchBullObj = {}
+          context.drawImage(imgDomList.ropeImg, posInfo.ropeLeft, posInfo.ropeStart - ropeCount * posInfo.roppxFrame, 221 * posInfo.rate, 883 * posInfo.rate)
+        } else {
+          hasCatch = true
+          catchBullObj = bullList[index]
+          hasReachTop = true // 抓住就开始下落
+          bullList.splice(index, 1)
+          context.drawImage(imgDomList['catchlevel'+catchBullObj.type], posInfo.ropeCatchLeft, posInfo.ropeStart - ropeCount * posInfo.roppxFrame, 362 * posInfo.rate, 728 * posInfo.rate)
+          posInfo.catchRopepxFrame = ropeCount * posInfo.roppxFrame / (500/timeInterval)
+          posInfo.catchPoix = posInfo.ropeStart - ropeCount * posInfo.roppxFrame + ropeCount * posInfo.catchRopepxFrame
+        }
+      }
+    }
+  } else {
+    context.drawImage(imgDomList.ropeImg, 264.5 * posInfo.rate, posInfo.ropeStart, 221 * posInfo.rate, 883 * posInfo.rate)
+  }
+
+  // 帧动画方式与setinterval方式计时结束不同的方式
+  if (type === 'setinterval') {
+    if (timestamp - start <= 20000) { } else {
+      // 结束计时
+      clearInterval(frameTimer)
+      that.secLeft = 0
+      that.timeoutShow = true
+    }
+  } else {
+    if (timestamp - start <= 20000) {
+      requestAnimationFrame(this.animationFrame)
+    } else {
+      // 结束计时
+      that.secLeft = 0
+      that.timeoutShow = true
+    }
+  }
+},
+
+// 创建新的牛 每一秒添加一只三级牛和二级牛 每两秒出现一只一等牛
+creatBull(time) {
+  // 每1000ms执行一次
+  let tick = Math.floor(time/1000)
+  if (createArr.indexOf( tick ) === -1) {
+    createArr.push(tick)
+  } else {
+    return false
+  }
+  // 一等牛
+  if (randomArr.arrlevel1.indexOf(tick) > -1) {
+    bullList.push({
+      type: 1,
+      count: 0
+    })
+  }
+  // 二等牛
+  if (randomArr.arrlevel2.indexOf(tick) > -1) {
+    bullList.push({
+      type: 2,
+      count: 0
+    })
+  }
+  // 三等牛
+  if (randomArr.arrlevel3.indexOf(tick) > -1) {
+    bullList.push({
+      type: 3,
+      count: 0
+    })
+  }
+},
+
+// 获取drawImage的各个参数
+// item:牛对象 oneOrTwo:判断牛跑步左脚在前还是右脚在前 分别画图
+getDrawImageParam(item, oneOrTwo) { 
+  let img = imgDomList['runlevel'+item.type+oneOrTwo]
+  let posX = 0
+  let posY = 0
+  let width = 0
+  let height = 267 * posInfo.rate
+  if (item.type === 1) {
+    posX = posInfo['runpxFramelevel'+item.type] * item.count - 236 * posInfo.rate
+    posY = 9 * posInfo.rate
+    width = 236 * posInfo.rate
+  } else if (item.type === 2) {
+    posX = posInfo['runpxFramelevel'+item.type] * item.count - 236 * posInfo.rate
+    posY = 170 * posInfo.rate
+    width = 236 * posInfo.rate
+  } else {
+    posX = posInfo['runpxFramelevel'+item.type] * item.count - 266 * posInfo.rate
+    posY = 275 * posInfo.rate
+    width = 266 * posInfo.rate
+  }
+  context.drawImage(img, posX, posY, width, height)
+},
+
+// 判断是否抓到牛
+// item：牛对象 rpCount：绳子计数器 state：状态 1 返回到达起始 2 返回途中 3 上升到达顶部 4 上升途中
+judgeIsCatched(item, rpCount, state) { 
+  if (getPlatform() === 'gphone' && ( Number( getGphoneVersion().split('.')[0] ) < 6 || ( Number( getGphoneVersion().split('.')[0] ) === 6 && Number( getGphoneVersion().split('.')[1] ) === 0 ) )) {
+    baseDis = posInfo.rate * 120
+  } else {
+    baseDis = posInfo.rate * 100
+  }
+  if (item) {
+    let x1 = posInfo.ropeLeft + posInfo.ropeCenterx || 0
+    let y1 = 0
+    if (state === 1) {
+      y1 = posInfo.ropeStart + posInfo.ropeCentery
+    } else if (state === 2) {
+      y1 = posInfo.ropeStart - rpCount * posInfo.roppxFrame + posInfo.ropeCentery
+    } else if (state === 3) {
+      y1 = posInfo.ropeEnd + posInfo.ropeCentery
+    } else {
+      y1 = posInfo.ropeStart - rpCount * posInfo.roppxFrame + posInfo.ropeCentery
+    }
+    let x2 = 0 
+    let y2 = 0
+    if (item.type === 1) {
+      x2 = posInfo['runpxFramelevel' + item.type] * item.count - 236 * posInfo.rate + posInfo['levelCenterx' + item.type]
+      y2 = 9 * posInfo.rate + posInfo.levelCentery
+    } else if (item.type === 2) {
+      x2 = posInfo['runpxFramelevel' + item.type] * item.count - 236 * posInfo.rate + posInfo['levelCenterx' + item.type]
+      y2 = 170 * posInfo.rate + posInfo.levelCentery
+    } else {
+      x2 = posInfo['runpxFramelevel' + item.type] * item.count - 266 * posInfo.rate + posInfo['levelCenterx' + item.type]
+      y2 = 275 * posInfo.rate + posInfo.levelCentery
+    }
+
+    // 计算距离
+    let xdis = x2 - x1
+    let ydis = y2 - y1
+    let dis = Math.sqrt(Math.pow(xdis, 2) + Math.pow(ydis, 2)) // 两个中心点的直线距离
+    if (dis <= baseDis) {
+      this.getBullCard(item.type)
+      return true
+    } else {
+      return false
+    }
+  } else {
+    return false
+  }
+},
+```
+
+findIndex 的兼容方法：
+```
+// 兼容ie数组没有findIndex方法
+if (!Array.prototype.findIndex) {
+  Object.defineProperty(Array.prototype, 'findIndex', {
+    value: function(predicate) {
+      if (this == null) {
+        throw new TypeError('"this" is null or not defined');
+      }
+      var o = Object(this);
+      var len = o.length >>> 0;
+      if (typeof predicate !== 'function') {
+        throw new TypeError('predicate must be a function');
+      }
+      var thisArg = arguments[1];
+      var k = 0;
+      while (k < len) {
+        var kValue = o[k];
+        if (predicate.call(thisArg, kValue, k, o)) {
+          return k;
+        }
+        k++;
+      }
+      return -1;
+    }
+  });
+}
 ```
