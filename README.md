@@ -298,7 +298,7 @@ var scratchMove = function(e) {
 ```
 var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame
 ```
-但是由于测试机型的时候发现部分低版本安卓手机的动画还是没有达到预期的效果，该浏览器兼容的方法还是无法完全满足自身性能问题导致的帧动画调用的间隔会相对较长，由于无法控制调用的时间，我还是把万能的 setInterval 请回来了，对于高频问题的安卓6.0及以下设备做了兼容处理，具体实现如下：
+但是测试机型的时候发现部分低版本安卓手机的动画还是没有达到预期的效果，该浏览器兼容的方法还是无法完全满足自身性能问题导致的帧动画调用的间隔会相对较长，由于无法控制调用的时间，我还是把万能的 setInterval 请回来了，对于高频问题的安卓6.0及以下设备做了兼容处理，具体实现如下：
 ```
 var timeInterval = null // 帧毫秒数
 
@@ -308,4 +308,56 @@ if (getPlatform() === 'gphone' && ( Number( getGphoneVersion().split('.')[0] ) <
   timeInterval = window.interval || 1000/60
 }
 ```
-其中，getPlatform() 和 getGphoneVersion() 这两个公共方法在 [common.js](scrips/common.js)中
+其中，getPlatform() 和 getGphoneVersion() 这两个公共方法在 **scrips/common.js** 中
+
+接下来就是游戏逻辑的简单实现了：
+```
+// 变量定义
+var hasClickTaoniuBtn = false // 是否点击套牛按钮 点击该按钮之后作为标志符 直至绳索回来之前 改变绳索的位置 否则则使绳子停留在起始位置
+var hasReachTop = false // 是否到达顶部 游戏设计只有绳索上升过程才能套中牛 以此标志符来进行判断是否调用判断函数
+var hasCatch = false // 是否抓住牛 抓住牛后需要对状态进行重置 使绳处于收回状态
+var catchBullObj = {} // 抓住的牛对象
+var timeLevel3 = 1000 // 三级牛跑过的时间 ms
+var timeLevel2 = 1200 // 二级牛跑过的时间 ms
+var timeLevel1 = 1500 // 一级牛跑过的时间 ms
+var timeRope = 500 // 绳子到达顶部的时间
+var posInfo = { // 基本位置信息对象
+	winWidth: $(window).width(), // 屏蔽宽度 可定义每种牛跑过一屏的时间来兼容移动端设备
+  rate: $(window).width() / 750, // 转换率 方便rem转px 750为设计稿宽度
+
+  // 每种牛有各自的跑道 定义各自的参数
+  toplevel1: 9 * $(window).width() / 750, // 一等牛距离canvas容器顶部的像素 
+  toplevel2: 170 * $(window).width() / 750,
+  toplevel3: 275 * $(window).width() / 750,
+  ropeLeft: 264.5 * $(window).width() / 750, // 绳子距离左侧的像素
+  ropeCatchLeft: 194 * $(window).width() / 750, // 抓住后绳子距离左侧的像素 抓住牛后图片会变更为绳上有牛的 尺寸变化所以位置也需要变更
+  ropeStart: 411 * $(window).width() / 750, // 绳子起始位置距离canvas容器顶部的像素
+  ropeEnd: 9 * $(window).width() / 750, // 绳子扔出达到最高处距离canvas容器顶部的像素
+
+  // 牛及绳子每帧移动的像素
+  runpxFramelevel3: $(window).width()/(timeLevel3/timeInterval), // 三等牛每帧跑的px
+  runpxFramelevel2: $(window).width()/(timeLevel2/timeInterval), // 二等牛每帧跑的px
+  runpxFramelevel1: $(window).width()/(timeLevel1/timeInterval), // 一等牛每帧跑的px
+  roppxFrame: 402 * $(window).width() / 750 / (timeRope/timeInterval), // 绳子每帧的px
+
+  // 初始化变量 无论何处抓住牛 绳子都以500ms耗时收回
+  catchPoix: 0, // 牛被抓住时绳子上升的高度 
+  catchRopepxFrame: 0, // 抓住牛后绳子收回每帧的px
+  
+  // 以下几个参数都是用来判断牛是否套中的 绳圈中心与牛头中心的距离在一定范围内即套中
+  ropeCenterx: 110 * $(window).width() / 750, // 绳圈中心相对绳子图片原点的x坐标 
+  ropeCentery: 85 * $(window).width() / 750, // 绳圈中心相对绳子图片原点的y坐标
+  levelCentery: 40 * $(window).width() / 750, // 牛中心距离的y坐标
+  levelCenterx1: 155 * $(window).width() / 750, // 一等牛中心距离x
+  levelCenterx2: 170 * $(window).width() / 750, // 二等牛中心距离x
+  levelCenterx3: 200 * $(window).width() / 750, // 三等牛中心距离x
+}
+```
+这样我们的基础参数就全部声明好了，接下来就需要初始化 canvas 了：
+```
+let canvas = document.getElementById('canvas')
+canvas.width = posInfo.winWidth
+posInfo.canvasHeight = $('.canvas-case').height()
+canvas.height = $('.canvas-case').height()
+context = canvas.getContext('2d')
+```
