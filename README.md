@@ -624,7 +624,7 @@ judgeIsCatched(item, rpCount, state) {
     let ydis = y2 - y1
     let dis = Math.sqrt(Math.pow(xdis, 2) + Math.pow(ydis, 2)) // 两个中心点的直线距离
     if (dis <= baseDis) {
-      this.getBullCard(item.type)
+      this.getBullCard(item.type) // 权重函数 逻辑在下方实现
       return true
     } else {
       return false
@@ -633,6 +633,57 @@ judgeIsCatched(item, rpCount, state) {
     return false
   }
 },
+```
+
+前端根据后端给的权重生成随机函数：
+```
+// yao 一等牛 fu 二等牛 normal 三等牛
+getBullCard(type) { 
+  let that = this
+  let typeObj = {
+    1: 'yao',
+    2: 'fu',
+    3: 'normal'
+  }
+  let cardObj = {
+    'yao': 3,
+    'lian': 1,
+    'bai': 0,
+    'zhang': 2,
+    'hei': 4
+  }
+  let cardTypeName = typeObj[type] // 获得对象名
+  if (!this[cardTypeName+'Arr'] || this[cardTypeName+'Arr'].length === 0) { // 未缓存随机数组的话，就生成一个
+    for (let key in this.card_rate_info[cardTypeName]) {
+      if (parseInt( (this.card_rate_info[cardTypeName][key]) * 100 ) !== 0) {
+        for (let i = 0; i < parseInt( (this.card_rate_info[cardTypeName][key]) * 100 ); i++) {
+          this[cardTypeName+'Arr'].push(key)
+        }
+      }
+    }
+  }
+  let num = Math.floor(Math.random() * 100) // 0~99
+  let getCard = this[cardTypeName+'Arr'][num] // 按权重，随机获取卡片
+  if (getCard && getCard !== 'empty') { // getCard不存在或者empty则为抓空了
+    this.card_list.push(getCard)
+    this.cardsList[cardObj[getCard]]!==undefined ? this.cardsList[cardObj[getCard]]++ : this.cardsList[cardObj[getCard]] = 1
+    this.bullNum++
+    this.cardDetail.show = true
+    this.cardDetail.cardName = nameObj[getCard]
+    setTimeout(() => {
+      that.cardDetail.show = false
+    },1500)
+    if (this.bullNum === this.remain_card_num) {
+      this.submitResult()
+    }
+  } else {
+    this.cardDetail.show = true
+    this.cardDetail.cardName = ''
+    setTimeout(() => {
+      that.cardDetail.show = false
+    },1500)
+  }
+}
 ```
 
 findIndex 的兼容方法：
